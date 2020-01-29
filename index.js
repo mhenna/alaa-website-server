@@ -72,25 +72,7 @@ app.post("/addModel", async (req, res) => {
 })
 
 app.get('/getFile', async (req, res) => {
-  try {
-    const readStream = GridFS.createReadStream({
-      filename: req.query.name,
-    }).on('error', function (err) {
-      res.status(500).send({ "error": err })
-    })
-
-    const bufs = [];
-    readStream.on('data', function (chunk) {
-      bufs.push(chunk);
-    });
-    readStream.on('end', function () {
-      const fbuf = Buffer.concat(bufs);
-      const base64 = fbuf.toString('base64');
-      res.status(200).send({ "data": base64 })
-    });
-  } catch (err) {
-    res.status(500).send({ "error": err });
-  }
+  utils.getFile(req.query.name, GridFS, res, utils.returnGetFileResponse)
 })
 
 app.get("/getModels", async (req, res) => {
@@ -112,44 +94,29 @@ app.get("/getModelByProject", async (req, res) => {
 })
 
 app.put("/editModel", async (req, res) => {
-  try {
-    const model = await Model.findOneAndUpdate({ name: req.body.name }, { model: req.body.model }, { new: true });
-    res.status(200).send({ "data": model });
-  } catch (err) {
-    res.status(500).send({ "error": err });
-  }
+  bb.extend(app, {
+    upload: true,
+  })
+  const file = req.files.model;
+  const name = req.body.name
+  utils.deleteFile(req.body.name, GridFS, res, mongoose, function(res, response) {
+    if (response.error)
+      res.status(500).send(response);
+    else {
+      console.log("deleted file")
+      const resp = utils.putFile(file, name, GridFS);
+      if (resp == "Success")
+        res.status(200).send({"data": "done"});
+      else
+        res.status(500).send({"error": "error editing file"});
+    }
+  })
 })
 
 app.delete("/deleteModel", async (req, res) => {
   try {
-    GridFS.files.find({ filename: req.query.name }).toArray(function (err, files) {
-      if (err)
-        res.status(500).send({ "error": err });
-      else {
-        const id = files[0]._id
-
-        GridFS.db.collection('fs.chunks').remove({ files_id: mongoose.Types.ObjectId(id) }, function (err) {
-          if (err)
-            res.status(500).send({ "error": err });
-          else {
-            GridFS.files.remove({ _id: mongoose.Types.ObjectId(id) }, async function (err) {
-              if (err)
-                res.status(500).send({ "error": err })
-              else {
-                try {
-                  const model = await Model.deleteOne({ name: req.query.name });
-                  res.status(200).send({ "data": model });
-                  return;
-                } catch (err) {
-                  res.status(500).send({ "error": err })
-                  return;
-                }
-              }
-            })
-          }
-        })
-      }
-    })
+    await Model.deleteOne({ name: req.query.name });
+    utils.deleteFile(req.query.name, GridFS, res, mongoose, utils.returnDeleteFileResponse);
   } catch (err) {
     res.status(500).send({ "error": err });
   }
