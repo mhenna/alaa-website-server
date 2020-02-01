@@ -1,0 +1,18 @@
+version: '2'
+services:
+    alaa-server:
+        image: mhenna/alaa-server:latest
+        ports: 
+            - "3300:3300"
+        links:
+            - mongo
+    mongo:
+        image: mongo
+        expose: 
+            - 27017
+        volumes: 
+            - ./mongo-volume:/data/db
+    alaa-ui:
+        image: mhenna/alaa-ui:latest
+        ports: 
+            - "4200:80"
